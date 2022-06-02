@@ -3,12 +3,13 @@ from model import ImageUrl
 from PIL import Image
 from io import BytesIO
 import requests
+import uuid
+
 
 app =  FastAPI()
-
 SUBSCRIPTION_KEY = 'a6498ac0712546258fd220d13d2e90bb'
 ENDPOINT = 'https://cv-alt-text-generator.cognitiveservices.azure.com/'
-REQUEST_URL = ENDPOINT +'vision/v3.2/describe?maxCandidates=1&language=en&model-version=latest'
+REQUEST_URL = ENDPOINT +'vision/v3.2/describe?maxCandidates=4&language=en&model-version=latest'
 headers = {'Ocp-Apim-Subscription-Key':SUBSCRIPTION_KEY}
 params = {'visualFeatures':'Categories,Description,Color'}
 
@@ -22,16 +23,23 @@ class ImageDetails():
     total_bytes: int
     image_binary: int
 
+class Caption():
+    alt_text: str
+    confidence: float
+
+class Response():
+    captions: Caption
+    request_id: str
+    status: str
+   
 @app.post("/api")
-async def root(imageUrl:ImageUrl):
-    # we might to check the url and download the image before proceeding
+async def root(imageUrl: ImageUrl):
     try:
         if is_valid_image(download_image_from_url(imageUrl.url)) == True:
-            response = get_image_description(imageUrl.url)
-            return { "response": response}
+            return { "response": get_image_description(imageUrl.url)}
+    
     except Exception as e:
-        print(e)
-        return "An Error occurred."
+        return e
 
 def download_image_from_url(url):
     # validate url before proceeding
@@ -43,10 +51,10 @@ def download_image_from_url(url):
     if response.status_code == 200 or response.status_code == 201:
         imageDetails = ImageDetails()
         imageDetails.image_binary = response.content
-
         return imageDetails
+    
     elif response.status_code >= 500 and response.status_code < 600:
-        print("server error")
+        return {"details": "server error"}
     
     return None
 
@@ -75,18 +83,18 @@ def is_valid_image(imageDetails, max_file_size=4000000):
         else:
             return "Invalid image format."
     except Exception as e:
-        print(e)
-        return "error processing image"
+        return {"error" : e}
 
 def get_image_description(url):
     data = {'url':url}
     response = requests.post(REQUEST_URL,headers=headers,params=params,json=data)
     response.raise_for_status()
     analysis = response.json()
-    results = dict()
-    results['alt-text'] = analysis['description']['captions'][0]['text'].capitalize()
-    results['confidence'] = "{:.2f}".format(analysis['description']['captions'][0]['confidence'])
-    results['height'] = analysis['metadata']['height']
-    results['width'] = analysis['metadata']['width']
-    results['image_format']= analysis['metadata']['format']
+    results = Response()
+    results.captions = Caption()
+
+    results.status = response.status_code
+    results.request_id = uuid.uuid4()
+    results.captions.alt_text = analysis['description']['captions'][0]['text'].capitalize()
+    results.captions.confidence = "{:.2f}".format(analysis['description']['captions'][0]['confidence']) 
     return results
