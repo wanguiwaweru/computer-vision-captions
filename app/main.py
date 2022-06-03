@@ -1,32 +1,36 @@
 from app.model import APIRequest, APIResponse, Caption, ImageDetails
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from PIL import Image
 from io import BytesIO
 import requests
-
+import config
 
 app =  FastAPI()
-SUBSCRIPTION_KEY = 'a6498ac0712546258fd220d13d2e90bb'
-ENDPOINT = 'https://cv-alt-text-generator.cognitiveservices.azure.com/'
-REQUEST_URL = ENDPOINT +'vision/v3.2/describe?maxCandidates=4&language=en&model-version=latest'
-headers = {'Ocp-Apim-Subscription-Key':SUBSCRIPTION_KEY}
-params = {'visualFeatures':'Categories,Description,Color'}
+
+
 
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
-
 res = APIResponse()
 
 @app.post("/api")
-async def root(request: APIRequest):
+async def root(httpRequest: Request, request: APIRequest):
     try:
-        res.status_code = 200
-        res.request_id = request.request_id
+        if httpRequest.headers.get('X-Caller-ID') is None or str(httpRequest.headers.get('X-Caller-ID')).isspace():
+            return JSONResponse(status_code = 400, content = {"message":"Missing or invalid X-Caller-ID"})
 
         if is_valid_image(download_image_from_url(request.url)) == True:
-            res.message = "Image downloaded successfully"
+            
+            #logging_info = httpRequest.headers.get('X-Caller-ID')
+            #print(logging_info)
+            
+            res.status_code = 200
+            res.request_id = request.request_id
+            res.message = "Image processed successfully."
             res.captions = get_image_description(request.url)
+            
     except Exception as e:
-        print(e)
+        return e
     
     return res
 
@@ -82,9 +86,8 @@ def is_valid_image(imageDetails, max_file_size=4000000):
 
 def get_image_description(url):
     captions = list()
-
-    data = {'url':url}
-    response = requests.post(REQUEST_URL,headers=headers,params=params,json=data)
+    data = {'url':url} 
+    response = requests.post(config.REQUEST_URL,headers=config.headers,params=config.params,json=data)     
     response.raise_for_status()
     analysis = response.json()
 
@@ -93,5 +96,5 @@ def get_image_description(url):
         caption.alt_text = analysis['description']['captions'][i]['text'].capitalize()
         caption.confidence = "{:.2f}".format(analysis['description']['captions'][i]['confidence'])
         captions.append(caption)
-    
+
     return captions
