@@ -21,9 +21,6 @@ async def root(httpRequest: Request, request: APIRequest):
 
         if is_valid_image(download_image_from_url(request.url)) == True:
             
-            #logging_info = httpRequest.headers.get('X-Caller-ID')
-            #print(logging_info)
-            
             res.status_code = 200
             res.request_id = request.request_id
             res.message = "Image processed successfully."
