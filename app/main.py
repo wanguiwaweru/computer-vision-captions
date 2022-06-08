@@ -1,14 +1,13 @@
 from app.model import APIRequest, APIResponse, Caption, ImageDetails
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from PIL import Image
 from io import BytesIO
 import requests
 import config
 
 app =  FastAPI()
-
-
 
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
 res = APIResponse()
@@ -20,16 +19,18 @@ async def root(httpRequest: Request, request: APIRequest):
             return JSONResponse(status_code = 400, content = {"message":"Missing or invalid X-Caller-ID"})
 
         if is_valid_image(download_image_from_url(request.url)) == True:
-            
-            res.status_code = 200
+
             res.request_id = request.request_id
             res.message = "Image processed successfully."
             res.captions = get_image_description(request.url)
-            
+            service_id = httpRequest.headers.get('X-Caller-ID')
+            root_operation_id = service_id + res.request_id
+    
+            json_compatible_item_data = jsonable_encoder(res)
+        return JSONResponse(status_code = 200, content = json_compatible_item_data)
+
     except Exception as e:
         return e
-    
-    return res
 
 def download_image_from_url(url):
     # validate url before proceeding
@@ -87,6 +88,8 @@ def get_image_description(url):
     response = requests.post(config.REQUEST_URL,headers=config.headers,params=config.params,json=data)     
     response.raise_for_status()
     analysis = response.json()
+    cv_request_id =analysis['requestId']
+   
 
     for i in range(len(analysis['description']['captions'])):
         caption = Caption()
