@@ -1,4 +1,5 @@
-from app.model import APIRequest, APIResponse, Caption, ImageDetails
+from datetime import datetime
+from app.model import APIRequest, APIResponse, Caption, ImageDetails,AzureCVResponse
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -6,31 +7,55 @@ from PIL import Image
 from io import BytesIO
 import requests
 import config
+import uuid
 
 app =  FastAPI()
 
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
-res = APIResponse()
 
 @app.post("/api")
 async def root(httpRequest: Request, request: APIRequest):
     try:
-        if httpRequest.headers.get('X-Caller-ID') is None or str(httpRequest.headers.get('X-Caller-ID')).isspace():
-            return JSONResponse(status_code = 400, content = {"message":"Missing or invalid X-Caller-ID"})
+        initialize_request(request)
 
-        if is_valid_image(download_image_from_url(request.url)) == True:
+        global res
+        res = APIResponse()
 
+        if headers_valid(httpRequest.headers):
+            res.status_code = 400
+            res.message = "Missing or invalid X-Caller-ID"
+        elif is_valid_image(download_image_from_url(request.url)) == True:
+            request.azure_cv_response = get_image_description(request.url)
             res.request_id = request.request_id
             res.message = "Image processed successfully."
-            res.captions = get_image_description(request.url)
-            service_id = httpRequest.headers.get('X-Caller-ID')
-            root_operation_id = service_id + res.request_id
-    
-            json_compatible_item_data = jsonable_encoder(res)
-        return JSONResponse(status_code = 200, content = json_compatible_item_data)
+            res.captions = request.azure_cv_response.captions
 
     except Exception as e:
+        # log exception details
         return e
+    finally:
+        # do some clean
+        request.response = res
+        audit(request)
+    
+    return JSONResponse(status_code = res.status_code, content = jsonable_encoder(res))
+
+def headers_valid(headers):
+    if headers.get('X-Caller-ID') is None or str(headers.get('X-Caller-ID')).isspace():
+        return True
+    
+    return False
+
+def initialize_request(request):
+    try:
+        request.request_time = datetime.now()
+        request.root_operation_id = uuid.uuid4()
+    except Exception as e:
+        print(e)
+        raise e
+
+def audit(request):
+    pass
 
 def download_image_from_url(url):
     # validate url before proceeding
@@ -88,13 +113,14 @@ def get_image_description(url):
     response = requests.post(config.REQUEST_URL,headers=config.headers,params=config.params,json=data)     
     response.raise_for_status()
     analysis = response.json()
-    cv_request_id =analysis['requestId']
-   
 
     for i in range(len(analysis['description']['captions'])):
         caption = Caption()
         caption.alt_text = analysis['description']['captions'][i]['text'].capitalize()
         caption.confidence = "{:.2f}".format(analysis['description']['captions'][i]['confidence'])
         captions.append(caption)
-
-    return captions
+    
+    azure_cv_response = AzureCVResponse()
+    azure_cv_response.request_id = analysis['requestId']
+    azure_cv_response.captions = captions
+    return azure_cv_response
