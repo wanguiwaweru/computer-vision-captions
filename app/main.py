@@ -1,4 +1,5 @@
 from datetime import datetime
+import hashlib
 from app.model import APIRequest, APIResponse, Caption, ImageDetails,AzureCVResponse
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -9,35 +10,42 @@ import requests
 import config
 import uuid
 
+
 app =  FastAPI()
 
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
+cache = {}
 
 @app.post("/api")
 async def root(httpRequest: Request, request: APIRequest):
     try:
         initialize_request(request)
-
         global res
         res = APIResponse()
 
-        if headers_valid(httpRequest.headers):
-            res.status_code = 400
-            res.message = "Missing or invalid X-Caller-ID"
-        elif is_valid_image(download_image_from_url(request.url)) == True:
-            request.azure_cv_response = get_image_description(request.url)
-            res.request_id = request.request_id
-            res.message = "Image processed successfully."
-            res.captions = request.azure_cv_response.captions
+        if request.sha_key in cache:
+            return cache['response']
+            
+        else:        
+            if headers_valid(httpRequest.headers):
+                res.status_code = 400
+                res.message = "Missing or invalid X-Caller-ID"
+            elif is_valid_image(download_image_from_url(request.url)) == True:
+                request.azure_cv_response = get_image_description(request.url)
+                res.request_id = request.request_id
+                res.message = "Image processed successfully."
+                res.captions = request.azure_cv_response.captions
 
+                cache[request.sha_key] = request.root_operation_id
+                cache['response'] = jsonable_encoder(res)
+                
     except Exception as e:
         # log exception details
         return e
     finally:
-        # do some clean
         request.response = res
         audit(request)
-    
+
     return JSONResponse(status_code = res.status_code, content = jsonable_encoder(res))
 
 def headers_valid(headers):
@@ -50,6 +58,7 @@ def initialize_request(request):
     try:
         request.request_time = datetime.now()
         request.root_operation_id = uuid.uuid4()
+        request.sha_key = hashlib.sha256(request.url.encode()).hexdigest()
     except Exception as e:
         print(e)
         raise e
@@ -124,3 +133,5 @@ def get_image_description(url):
     azure_cv_response.request_id = analysis['requestId']
     azure_cv_response.captions = captions
     return azure_cv_response
+
+

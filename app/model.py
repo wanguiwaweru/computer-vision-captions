@@ -29,6 +29,7 @@ class AzureCVResponse():
 class APIRequest(BaseModel):
     url: Optional[str]
     root_operation_id: Optional[str]
+    sha_key:Optional[str]
     request_id: Optional[str]
     request_time: Optional[datetime]
     response: Optional[APIResponse]
