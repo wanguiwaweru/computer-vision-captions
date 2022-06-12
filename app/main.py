@@ -38,7 +38,7 @@ async def root(httpRequest: Request, request: APIRequest):
                 res.message = "Image processed successfully."
                 res.captions = request.azure_cv_response.captions
 
-                client.set(request.sha_key,json.dumps(jsonable_encoder(res)))
+                client.setex(request.sha_key,60,json.dumps(jsonable_encoder(res)))
 
     except Exception as e:
         # log exception details
