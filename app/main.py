@@ -9,12 +9,12 @@ from io import BytesIO
 import requests
 import config
 import uuid
-
+import json
+from caching import *
 
 app =  FastAPI()
 
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
-cache = {}
 
 @app.post("/api")
 async def root(httpRequest: Request, request: APIRequest):
@@ -22,11 +22,13 @@ async def root(httpRequest: Request, request: APIRequest):
         initialize_request(request)
         global res
         res = APIResponse()
+        
+        response = get_response_from_cache(request)
 
-        if request.sha_key in cache:
-            return cache['response']
-            
-        else:        
+        if response is not None:
+            response = json.loads(response)
+            return response
+        else:
             if headers_valid(httpRequest.headers):
                 res.status_code = 400
                 res.message = "Missing or invalid X-Caller-ID"
@@ -36,16 +38,14 @@ async def root(httpRequest: Request, request: APIRequest):
                 res.message = "Image processed successfully."
                 res.captions = request.azure_cv_response.captions
 
-                cache[request.sha_key] = request.root_operation_id
-                cache['response'] = jsonable_encoder(res)
-                
+                client.set(request.sha_key,json.dumps(jsonable_encoder(res)))
+
     except Exception as e:
         # log exception details
         return e
     finally:
         request.response = res
         audit(request)
-
     return JSONResponse(status_code = res.status_code, content = jsonable_encoder(res))
 
 def headers_valid(headers):
@@ -133,5 +133,4 @@ def get_image_description(url):
     azure_cv_response.request_id = analysis['requestId']
     azure_cv_response.captions = captions
     return azure_cv_response
-
 
