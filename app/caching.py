@@ -17,7 +17,8 @@ def redis_connect() -> redis.client.Redis:
 
 def get_response_from_cache(request):
     """Data from redis."""
-    
-    return client.get(request.sha_key)
+
+    return client.get(request)
 
 client = redis_connect()
+timeout = 120

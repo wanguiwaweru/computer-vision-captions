@@ -1,6 +1,7 @@
 from datetime import datetime
 import hashlib
-from app.model import APIRequest, APIResponse, Caption, ImageDetails,AzureCVResponse
+from logging import captureWarnings
+from app.model import APIRequest, ApiResponse, Caption, ImageDetails,AzureCVResponse
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -17,35 +18,40 @@ app =  FastAPI()
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
 
 @app.post("/api")
-async def root(httpRequest: Request, request: APIRequest):
+async def root(httpRequest: Request,request:APIRequest):
     try:
         initialize_request(request)
+       
         global res
-        res = APIResponse()
-        
-        response = get_response_from_cache(request)
+        res = ApiResponse()
 
-        if response is not None:
-            response = json.loads(response)
-            return response
-        else:
-            if headers_valid(httpRequest.headers):
-                res.status_code = 400
-                res.message = "Missing or invalid X-Caller-ID"
-            elif is_valid_image(download_image_from_url(request.url)) == True:
+        if headers_valid(httpRequest.headers):
+            res.status_code = 400
+            res.message = "Missing or invalid X-Caller-ID"
+        elif is_valid_image(download_image_from_url(request.url)) == True:
+            request.image = imageDetails
+            cached_image = get_response_from_cache(request.image.sha256_signature)
+
+            if cached_image is None:
                 request.azure_cv_response = get_image_description(request.url)
-                res.request_id = request.request_id
-                res.message = "Image processed successfully."
-                res.captions = request.azure_cv_response.captions
-
-                client.setex(request.sha_key,60,json.dumps(jsonable_encoder(res)))
+                res.captions =  request.azure_cv_response.captions
+                
+                # cache information about this image
+                client.setex(request.image.sha256_signature, timeout, json.dumps(jsonable_encoder(request.azure_cv_response)))
+                    
+            else:
+                # pick information from cached image
+                # if client already sent the request, return cached response instead
+            
+                res.captions = json.loads(cached_image)['captions']
+            res.request_id = request.request_id
+            res.message = "Image processed successfully."
 
     except Exception as e:
         # log exception details
         return e
     finally:
         request.response = res
-        audit(request)
     return JSONResponse(status_code = res.status_code, content = jsonable_encoder(res))
 
 def headers_valid(headers):
@@ -57,14 +63,10 @@ def headers_valid(headers):
 def initialize_request(request):
     try:
         request.request_time = datetime.now()
-        request.root_operation_id = uuid.uuid4()
-        request.sha_key = hashlib.sha256(request.url.encode()).hexdigest()
+        request.root_operation_id = uuid.uuid4()     
     except Exception as e:
         print(e)
         raise e
-
-def audit(request):
-    pass
 
 def download_image_from_url(url):
     # validate url before proceeding
@@ -72,10 +74,12 @@ def download_image_from_url(url):
     # 3XX, 4xx, 5XX
 
     response = requests.get(url)
-
+   
     if response.status_code == 200 or response.status_code == 201:
+        global imageDetails
         imageDetails = ImageDetails()
         imageDetails.image_binary = response.content
+
         return imageDetails
     
     elif response.status_code >= 500 and response.status_code < 600:
@@ -106,6 +110,7 @@ def is_valid_image(imageDetails, max_file_size=4000000):
             if int(imageDetails.total_bytes) <= max_file_size:
                 if (imageDetails.width and imageDetails.height > 50):
                     res.status_code = 200
+                    imageDetails.sha256_signature = hashlib.sha256(imageDetails.image_binary).hexdigest()
                     return True
                 else:
                     res.message = "Image should be greater than 50 x 50"

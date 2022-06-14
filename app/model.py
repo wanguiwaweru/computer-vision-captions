@@ -1,10 +1,9 @@
 from datetime import datetime
-from typing import TypeVar,Optional
+from typing import Optional
+
 from pydantic import BaseModel
 
-APIResponse = TypeVar('APIResponse')
-
-class APIResponse:
+class ApiResponse():
     status_code: int
     message: str
     request_id: str
@@ -17,6 +16,7 @@ class ImageDetails():
     height : int
     total_bytes: int
     image_binary: int
+    sha256_signature : str
 
 class Caption():
     alt_text: str
@@ -27,13 +27,13 @@ class AzureCVResponse():
     captions: Caption
 
 class APIRequest(BaseModel):
-    url: Optional[str]
     root_operation_id: Optional[str]
-    sha_key:Optional[str]
     request_id: Optional[str]
     request_time: Optional[datetime]
-    response: Optional[APIResponse]
+    response: Optional[ApiResponse]
     azure_cv_response: Optional[AzureCVResponse]
-
+    url: Optional[str]
+    image: Optional[ImageDetails]
+    
     class Config:
         arbitrary_types_allowed = True
