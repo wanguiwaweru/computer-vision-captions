@@ -31,7 +31,7 @@ async def root(httpRequest: Request,request:APIRequest):
         elif is_valid_image(download_image_from_url(request.url)) == True:
             request.image = imageDetails
             cached_image = get_response_from_cache(request.image.sha256_signature)
-
+           
             if cached_image is None:
                 request.azure_cv_response = get_image_description(request.url)
                 res.captions =  request.azure_cv_response.captions
@@ -51,6 +51,7 @@ async def root(httpRequest: Request,request:APIRequest):
         # log exception details
         return e
     finally:
+
         request.response = res
     return JSONResponse(status_code = res.status_code, content = jsonable_encoder(res))
 
