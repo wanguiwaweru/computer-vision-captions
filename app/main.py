@@ -1,17 +1,17 @@
-from datetime import datetime
-import hashlib
-from logging import captureWarnings
 from app.model import APIRequest, ApiResponse, Caption, ImageDetails,AzureCVResponse
+from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from PIL import Image
 from io import BytesIO
+from caching import *
+import hashlib
 import requests
 import config
 import uuid
 import json
-from caching import *
+
 
 app =  FastAPI()
 
@@ -138,4 +138,3 @@ def get_image_description(url):
     azure_cv_response.request_id = analysis['requestId']
     azure_cv_response.captions = captions
     return azure_cv_response
-

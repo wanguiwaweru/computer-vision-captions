@@ -223,6 +223,8 @@ venv.bak/
 Scripts/
 pyvenv.cfg
 config.py
+key.pem
+cert.pem
 
 # Spyder project settings
 .spyderproject

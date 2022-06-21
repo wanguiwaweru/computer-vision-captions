@@ -21,4 +21,4 @@ def get_response_from_cache(request):
     return client.get(request)
 
 client = redis_connect()
-timeout = 120
+timeout = 240
