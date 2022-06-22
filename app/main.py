@@ -1,6 +1,6 @@
-from app.model import APIRequest, ApiResponse, Caption, ImageDetails,AzureCVResponse
+from app.model import APIRequest, ApiResponse, Caption, ImageDetails,AzureCVResponse,RequestMetadata
 from datetime import datetime
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request,Header
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from PIL import Image
@@ -14,11 +14,12 @@ import json
 
 
 app =  FastAPI()
+request_metadata = RequestMetadata()
 
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
 
 @app.post("/api")
-async def root(httpRequest: Request,request:APIRequest):
+async def root(httpRequest: Request,request:APIRequest, x_caller_id:str = Header(default=None)):
     try:
         initialize_request(request)
        
@@ -29,15 +30,15 @@ async def root(httpRequest: Request,request:APIRequest):
             res.status_code = 400
             res.message = "Missing or invalid X-Caller-ID"
         elif is_valid_image(download_image_from_url(request.url)) == True:
-            request.image = imageDetails
-            cached_image = get_response_from_cache(request.image.sha256_signature)
+            request_metadata.image = imageDetails
+            cached_image = get_response_from_cache(request_metadata.image.sha256_signature)
            
             if cached_image is None:
-                request.azure_cv_response = get_image_description(request.url)
-                res.captions =  request.azure_cv_response.captions
+                request_metadata.azure_cv_response = get_image_description(request.url)
+                res.captions =  request_metadata.azure_cv_response.captions
                 
                 # cache information about this image
-                client.setex(request.image.sha256_signature, timeout, json.dumps(jsonable_encoder(request.azure_cv_response)))
+                client.setex(request_metadata.image.sha256_signature, timeout, json.dumps(jsonable_encoder(request_metadata.azure_cv_response)))
                     
             else:
                 # pick information from cached image
@@ -52,7 +53,7 @@ async def root(httpRequest: Request,request:APIRequest):
         return e
     finally:
 
-        request.response = res
+        request_metadata.response = res
     return JSONResponse(status_code = res.status_code, content = jsonable_encoder(res))
 
 def headers_valid(headers):
@@ -62,11 +63,10 @@ def headers_valid(headers):
     return False
 
 def initialize_request(request):
-    try:
-        request.request_time = datetime.now()
-        request.root_operation_id = uuid.uuid4()     
+    try: 
+        request_metadata.request_time = datetime.now()
+        request_metadata.root_operation_id = uuid.uuid4()     
     except Exception as e:
-        print(e)
         raise e
 
 def download_image_from_url(url):
@@ -92,7 +92,7 @@ def download_image_from_url(url):
 def is_valid_image(imageDetails, max_file_size=4000000):
     res.status_code = 500
 
-    if imageDetails is None:
+    if imageDetails is None: 
         res.message = "Image details not found"
         return
     
