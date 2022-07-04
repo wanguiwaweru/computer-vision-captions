@@ -1,5 +1,6 @@
 from app.model import APIRequest, ApiResponse, Caption, ImageDetails,AzureCVResponse,RequestMetadata
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Request,Header
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -12,11 +13,20 @@ import config
 import uuid
 import json
 
-
 app =  FastAPI()
 request_metadata = RequestMetadata()
 
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
+supported_content_types = ("application/json")
+
+origins = ["http://localhost:3000", "localhost:3000"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 @app.post("/api")
 async def root(httpRequest: Request,request:APIRequest, x_caller_id:str = Header(default=None)):
