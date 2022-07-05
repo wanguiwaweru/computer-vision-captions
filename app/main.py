@@ -36,9 +36,12 @@ async def root(httpRequest: Request,request:APIRequest, x_caller_id:str = Header
         global res
         res = ApiResponse()
 
-        if headers_valid(httpRequest.headers):
+        if valid_headers(httpRequest.headers)==False:
             res.status_code = 400
             res.message = "Missing or invalid X-Caller-ID"
+        elif valid_content_type(httpRequest.headers)==False:
+            res.status_code = 422
+            res.message = "Content Type is not supported please use JSON"
         elif is_valid_image(download_image_from_url(request.url)) == True:
             request_metadata.image = imageDetails
             cached_image = get_response_from_cache(request_metadata.image.sha256_signature)
@@ -66,11 +69,15 @@ async def root(httpRequest: Request,request:APIRequest, x_caller_id:str = Header
         request_metadata.response = res
     return JSONResponse(status_code = res.status_code, content = jsonable_encoder(res))
 
-def headers_valid(headers):
+def valid_headers(headers):
     if headers.get('X-Caller-ID') is None or str(headers.get('X-Caller-ID')).isspace():
-        return True
-    
-    return False
+        return False
+    return True
+
+def valid_content_type(headers):
+    if headers.get('Content-Type') not in supported_content_types:
+        return False
+    return True
 
 def initialize_request(request):
     try: 
