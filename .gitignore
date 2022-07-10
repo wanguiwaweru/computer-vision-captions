@@ -222,7 +222,7 @@ env.bak/
 venv.bak/
 Scripts/
 pyvenv.cfg
-config.py
+venv/app/config.py
 key.pem
 cert.pem
 

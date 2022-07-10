@@ -97,7 +97,6 @@ def download_image_from_url(url):
         global imageDetails
         imageDetails = ImageDetails()
         imageDetails.image_binary = response.content
-
         return imageDetails
     
     elif response.status_code >= 500 and response.status_code < 600:
@@ -109,8 +108,9 @@ def download_image_from_url(url):
 def is_valid_image(imageDetails, max_file_size=4000000):
     res.status_code = 500
 
-    if imageDetails is None: 
-        res.message = "Image details not found"
+    if imageDetails is None:
+        res.status_code = 400
+        res.message = "Image details not found: URL does not contain a valid image"
         return
     
     if imageDetails.image_binary is None:
@@ -137,6 +137,8 @@ def is_valid_image(imageDetails, max_file_size=4000000):
         else:
             return "Invalid image format."
     except Exception as e:
+        res.status_code = 400
+        res.message = "URL does not have an image."
         return {"error" : e}
 
 def get_image_description(url):
