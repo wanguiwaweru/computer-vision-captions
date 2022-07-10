@@ -1,5 +1,6 @@
 from app.model import APIRequest, ApiResponse, Caption, ImageDetails,AzureCVResponse,RequestMetadata
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Request,Header
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -12,11 +13,20 @@ import config
 import uuid
 import json
 
-
 app =  FastAPI()
 request_metadata = RequestMetadata()
 
 supported_image_formats = ("PNG", "JPEG", "JPG","BMP","GIF")
+supported_content_types = ("application/json")
+
+origins = ["http://localhost:3000", "localhost:3000"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 @app.post("/api")
 async def root(httpRequest: Request,request:APIRequest, x_caller_id:str = Header(default=None)):
@@ -26,9 +36,12 @@ async def root(httpRequest: Request,request:APIRequest, x_caller_id:str = Header
         global res
         res = ApiResponse()
 
-        if headers_valid(httpRequest.headers):
+        if valid_headers(httpRequest.headers)==False:
             res.status_code = 400
             res.message = "Missing or invalid X-Caller-ID"
+        elif valid_content_type(httpRequest.headers)==False:
+            res.status_code = 422
+            res.message = "Content Type is not supported please use JSON"
         elif is_valid_image(download_image_from_url(request.url)) == True:
             request_metadata.image = imageDetails
             cached_image = get_response_from_cache(request_metadata.image.sha256_signature)
@@ -56,11 +69,15 @@ async def root(httpRequest: Request,request:APIRequest, x_caller_id:str = Header
         request_metadata.response = res
     return JSONResponse(status_code = res.status_code, content = jsonable_encoder(res))
 
-def headers_valid(headers):
+def valid_headers(headers):
     if headers.get('X-Caller-ID') is None or str(headers.get('X-Caller-ID')).isspace():
-        return True
-    
-    return False
+        return False
+    return True
+
+def valid_content_type(headers):
+    if headers.get('Content-Type') not in supported_content_types:
+        return False
+    return True
 
 def initialize_request(request):
     try: 
@@ -80,7 +97,6 @@ def download_image_from_url(url):
         global imageDetails
         imageDetails = ImageDetails()
         imageDetails.image_binary = response.content
-
         return imageDetails
     
     elif response.status_code >= 500 and response.status_code < 600:
@@ -92,8 +108,9 @@ def download_image_from_url(url):
 def is_valid_image(imageDetails, max_file_size=4000000):
     res.status_code = 500
 
-    if imageDetails is None: 
-        res.message = "Image details not found"
+    if imageDetails is None:
+        res.status_code = 400
+        res.message = "Image details not found: URL does not contain a valid image"
         return
     
     if imageDetails.image_binary is None:
@@ -120,6 +137,8 @@ def is_valid_image(imageDetails, max_file_size=4000000):
         else:
             return "Invalid image format."
     except Exception as e:
+        res.status_code = 400
+        res.message = "URL does not have an image."
         return {"error" : e}
 
 def get_image_description(url):
