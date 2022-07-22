@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ENDPOINT=${ENDPOINT}
+      - SUBSCRIPTION_KEY=${SUBSCRIPTION_KEY}
+    restart: unless-stopped
+    links:
+      - redis
+  redis:
+    image: redis
+    volumes:
+      - redis-volume:/data
+    restart: unless-stopped
+volumes:
+  redis-volume: {}
