@@ -16,7 +16,7 @@ On your terminal run uvicorn app.main:app
 Navigate to http://127.0.0.1:8000/docs to view the interactive docs.
 On postman create a POST request to http://127.0.0.1:8000/api and add a request body that contains the url and the request id.
 
-##DOCKER
+## DOCKER
 
 Run `docker compose up --build` 
 
