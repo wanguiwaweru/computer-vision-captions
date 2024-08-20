@@ -1,4 +1,4 @@
-# computer-vision-captions
+# Image Captions
 This project generates alt-text for images.
 
 To get started, clone the repo and run:
